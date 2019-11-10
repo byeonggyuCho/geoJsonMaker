@@ -8,7 +8,6 @@ const clean = require('gulp-clean');
 const { exec } = require('child_process');
 const iconv = require('iconv-lite');
 
-
 const shpPath = {
     ctprvn: {
         source: 'src/CTPRVN/TL_SCCO_CTPRVN.shp',
