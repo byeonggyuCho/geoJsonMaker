@@ -1,0 +1,27 @@
+{
+  "name": "geojsonmaker",
+  "version": "1.0.0",
+  "description": "20191109",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "Repository",
+    "for",
+    "processing",
+    "map",
+    "data"
+  ],
+  "author": "cater",
+  "license": "ISC",
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "gulp-clean": "^0.4.0",
+    "gulp-util": "^3.0.8",
+    "iconv-lite": "^0.5.0"
+  },
+  "devDependencies": {
+    "gulp": "^4.0.2"
+  }
+}
