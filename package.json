@@ -16,6 +16,7 @@
   "author": "cater",
   "license": "ISC",
   "dependencies": {
+    "adm-zip": "^0.4.13",
     "child_process": "^1.0.2",
     "gulp-clean": "^0.4.0",
     "gulp-util": "^3.0.8",

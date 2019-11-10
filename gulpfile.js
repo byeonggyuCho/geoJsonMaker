@@ -1,5 +1,8 @@
 'use strict';
 
+
+
+const admZip = require('adm-zip');
 const fs = require("fs");
 
 const gulp = require('gulp');
@@ -26,6 +29,42 @@ const shpPath = {
     }
 }
 
+
+
+const decompressAll = () => {
+
+   let targetFoler = "./download";
+
+   fs.readdir(targetFoler, (error, fileList)=>{
+
+        if(error){
+            console.error(error);
+            return
+        }
+
+        fileList.forEach((fileName)=>{
+            if(fileName.includes('.zip')){
+                let fullPath = [targetFoler,"/",fileName].join("");
+                decompress(fullPath);     //fullPath
+            }
+        })
+
+   })
+}
+
+//압축풀기
+const decompress = (filePath) => {
+
+    console.log(filePath)
+    const zip = new admZip(filePath)
+    let zipEntries = zip.getEntries();
+    zipEntries.forEach(zipEntry => {
+        //파일쓰기.
+        let content = zipEntry.getData().toString("utf8");
+        
+        fs.writeFileSync(`src/${zipEntry.entryName}`,content);
+    });
+}
 
 
 
@@ -202,5 +241,7 @@ function splitGeojson(type) {
 }
 
 
+
+exports.decompress = gulp.series(decompressAll);
 exports.convert = gulp.series(cleanShp, convert)
 exports.split = gulp.series(cleanSplit, split)
