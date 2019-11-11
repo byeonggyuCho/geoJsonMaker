@@ -1,37 +1,104 @@
 'use strict';
 
-
-
-const admZip = require('adm-zip');
+const axios = require("axios");
+const cheerio = require("cheerio"); 
+const download = require("download"); 
+const AdmZip = require('adm-zip');
 const fs = require("fs");
 
 const gulp = require('gulp');
-
 const clean = require('gulp-clean');
 const { exec } = require('child_process');
 const iconv = require('iconv-lite');
 
 const shpPath = {
     ctprvn: {
-        source: 'src/CTPRVN/TL_SCCO_CTPRVN.shp',
+        source: 'src/rawData/TL_SCCO_CTPRVN.shp',
         convert: 'src/CONVERT/TL_SCCO_CTPRVN_CONVERT.shp',
         json: 'dist/ctprvn.json'
     },
+
     sig: {
-        source: 'src/SIG/TL_SCCO_SIG.shp',
+        source: 'src/rawData/TL_SCCO_SIG.shp',
         convert: 'src/CONVERT/TL_SCCO_SIG_CONVERT.shp',
         json: 'dist/sig.json'
     },
     emd: {
-        source: 'src/EMD/TL_SCCO_EMD.shp',
+        source: 'src/rawData/TL_SCCO_EMD.shp',
         convert: 'src/CONVERT/TL_SCCO_EMD_CONVERT.shp',
         json: 'dist/emd.json'
     }
 }
 
 
+const downloadMapData = async (areaCode, theaterCode, date) => {
+  const getRawData = async () => {
+    try {
+      return await axios.get(
+        `http://www.gisdeveloper.co.kr/?p=2332`
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
-const decompressAll = () => {
+  return getRawData()
+    .then(html => {
+      const ulList = {
+        areaCode,
+        theaterCode,
+        date,
+        dataList: []
+      };
+      const $ = cheerio.load(html.data);
+      const $tableList = $('div.entry-content').find('table');
+
+
+    /**
+    var tr = table tbody tr
+    var td_2= tr.next().next() //두번째 td
+    var a = td_2.next()		//첫번째 aTag
+
+    var addr = a.href
+    
+     */
+
+
+
+    let result = [];
+
+        
+      $tableList.each((i,elem)=>{
+            let tbdoy = elem.children[0];
+            let trTag = tbdoy.next.children[0]
+            let tdTag = trTag.children[3];
+            let aTagList = tdTag.children.filter((item)=>{
+                    return item.name === 'a'
+            })
+            let targetAddr = aTagList[0].attribs.href;
+
+            result.push(targetAddr);
+      })
+
+
+        console.log("===================result========================");
+        console.log(result);
+
+        Promise.all(result.map(x => 
+            download(x, 'download'))
+        ).then((rtn) => {
+            console.log('all process is done');
+        });
+
+
+      return ulList;
+    })
+};
+
+
+
+
+const decompressAll = (done) => {
 
    let targetFoler = "./download";
 
@@ -41,14 +108,16 @@ const decompressAll = () => {
             console.error(error);
             return
         }
-
+  
         fileList.forEach((fileName)=>{
             if(fileName.includes('.zip')){
+
                 let fullPath = [targetFoler,"/",fileName].join("");
                 decompress(fullPath);     //fullPath
             }
         })
 
+        done();
    })
 }
 
@@ -56,13 +125,12 @@ const decompressAll = () => {
 const decompress = (filePath) => {
 
     console.log(filePath)
-    const zip = new admZip(filePath)
+    const zip = new AdmZip(filePath)
     let zipEntries = zip.getEntries();
     zipEntries.forEach(zipEntry => {
         //파일쓰기.
-        let content = zipEntry.getData().toString("utf8");
-        
-        fs.writeFileSync(`src/${zipEntry.entryName}`,content);
+        let content = zipEntry.getData()
+        fs.writeFileSync(`src/rawData/${zipEntry.entryName}`,content);
     });
 }
 
@@ -117,7 +185,7 @@ function split() {
 function mapshaper(key) {
     var command = 'mapshaper -i '
         + shpPath[key].source
-        + ' encoding=euc-kr -simplify weighted 0.5% -o format=shapefile '
+        + ' encoding=utf8 -simplify weighted 0.5% -o format=shapefile '
         + shpPath[key].convert;
 
     console.log(command);
@@ -213,7 +281,7 @@ function splitGeojson(type) {
             prev += JSON.stringify(cur);
 
             if (index < list.length - 1)
-                prev += ", "
+                prev += ", ";
 
             return prev;
 
@@ -242,6 +310,7 @@ function splitGeojson(type) {
 
 
 
+exports.download = gulp.series(downloadMapData);
 exports.decompress = gulp.series(decompressAll);
 exports.convert = gulp.series(cleanShp, convert)
 exports.split = gulp.series(cleanSplit, split)
