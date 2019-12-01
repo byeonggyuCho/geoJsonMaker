@@ -180,9 +180,9 @@ function split(done) {
     // 동 geojson 생성
     splitGeojson('emd');
 
-
-    done();
     console.log('[task] split done')
+    done();
+    
 }
 
 
@@ -279,16 +279,31 @@ function splitGeojson(type) {
     var feature = jsonContent.features[key]
     var subKey, cd, name
 
-    console.log('TEST!!!!', feature.properties)
 
     if (type == 'sig') {
-      cd = feature.properties.SIG_CD
-      name = feature.properties.SIG_KOR_NM
-      subKey = feature.properties.SIG_CD.substr(0, 2)
+
+        feature.properties.LOC_CD = feature.properties.SIG_CD;
+        feature.properties.LOC_KOR_NM = feature.properties.SIG_KOR_NM;
+
+        delete feature.properties.SIG_CD;
+        delete feature.properties.SIG_KOR_NM;
+
+
+      cd = feature.properties.LOC_CD
+      name = feature.properties.LOC_KOR_NM
+      subKey = feature.properties.LOC_CD.substr(0, 2)
     } else if (type == 'emd') {
-      cd = feature.properties.EMD_CD
-      name = feature.properties.EMD_KOR_NM
-      subKey = feature.properties.EMD_CD.substr(0, 5)
+
+        feature.properties.LOC_CD = feature.properties.EMD_CD;
+        feature.properties.LOC_KOR_NM = feature.properties.EMD_KOR_NM;
+
+        delete feature.properties.EMD_CD;
+        delete feature.properties.EMD_KOR_NM;
+
+
+      cd = feature.properties.LOC_CD
+      name = feature.properties.LOC_KOR_NM
+      subKey = feature.properties.LOC_CD.substr(0, 5)
     }
 
     console.log(`feature.properties.cd: ${cd}, feature.properties.name: ${name}`)
