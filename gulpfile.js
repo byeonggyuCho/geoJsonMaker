@@ -5,11 +5,15 @@ const cheerio = require("cheerio");
 const download = require("download"); 
 const AdmZip = require('adm-zip');
 const fs = require("fs");
+const _ = require('lodash')
 
 const gulp = require('gulp');
 const clean = require('gulp-clean');
 const { exec } = require('child_process');
 const iconv = require('iconv-lite');
+
+
+const downladPath = 'download'
 
 const shpPath = {
     ctprvn: {
@@ -31,7 +35,7 @@ const shpPath = {
 }
 
 
-const downloadMapData = async (areaCode, theaterCode, date) => {
+const downloadMapData = async (done) => {
   const getRawData = async () => {
     try {
       return await axios.get(
@@ -44,29 +48,11 @@ const downloadMapData = async (areaCode, theaterCode, date) => {
 
   return getRawData()
     .then(html => {
-      const ulList = {
-        areaCode,
-        theaterCode,
-        date,
-        dataList: []
-      };
       const $ = cheerio.load(html.data);
       const $tableList = $('div.entry-content').find('table');
 
 
-    /**
-    var tr = table tbody tr
-    var td_2= tr.next().next() //두번째 td
-    var a = td_2.next()		//첫번째 aTag
-
-    var addr = a.href
-    
-     */
-
-
-
     let result = [];
-
         
       $tableList.each((i,elem)=>{
             let tbdoy = elem.children[0];
@@ -85,13 +71,13 @@ const downloadMapData = async (areaCode, theaterCode, date) => {
         console.log(result);
 
         Promise.all(result.map(x => 
-            download(x, 'download'))
+            download(x, downladPath))
         ).then((rtn) => {
             console.log('all process is done');
+            done();
         });
 
 
-      return ulList;
     })
 };
 
@@ -100,7 +86,7 @@ const downloadMapData = async (areaCode, theaterCode, date) => {
 
 const decompressAll = (done) => {
 
-   let targetFoler = "./download";
+   let targetFoler = "./"+downladPath;
 
    fs.readdir(targetFoler, (error, fileList)=>{
 
@@ -117,8 +103,10 @@ const decompressAll = (done) => {
             }
         })
 
+        console.log('[task] decompess done')
         done();
    })
+
 }
 
 //압축풀기
@@ -136,24 +124,55 @@ const decompress = (filePath) => {
 
 
 
-const cleanShp = () => {
-    return gulp
-        .src(['dist/*.json', 'src/**/*_CONVERT.*'])
+
+const cleanShp = (done) => {
+    gulp.src(['dist/*.json', 'src/**/*_CONVERT.*'])
         .pipe(clean());
+
+    done();
 }
 
 
-const convert = () => {
-    for (var key in shpPath) {
-        console.log('==========');
+const convert =  function (done) {
 
-        mapshaper(key, shpPath[key].source);
-    }
+
+    let keys = Object.keys(shpPath);
+
+    console.log(keys);
+/* 
+    keys.forEach(async function(key){
+
+        try{
+            let path = shpPath[key].source
+            let result = await mapshaper(key, path);
+
+            await ogr2ogr(result);
+
+        }catch(e){
+            console.error(e);
+        }
+
+    })
+
+    console.log('[task] convert is done')
+    done(); */
+
+    return Promise.all(keys.map( key => 
+        mapshaper(key, shpPath[key].source)
+        .then(ogr2ogr)
+        .catch(e=>{
+            console.error(e);
+        })
+    ))
+    .then((rtn) => {
+        console.log(`[task] convert is done`);
+        done();
+    });
 }
 
 
 
-const cleanSplit = () => {
+const cleanSplit = (done) => {
     if (!fs.existsSync('dist/sig')) {
         fs.mkdirSync('dist/sig');
     }
@@ -162,15 +181,15 @@ const cleanSplit = () => {
         fs.mkdirSync('dist/emd');
     }
 
-    return gulp
-        .src(['dist/sig/*.json', 'dist/emd/*.json'])
+    gulp.src(['dist/sig/*.json', 'dist/emd/*.json'])
         .pipe(clean());
 
+    done();
 }
 
 
 
-function split() {
+function split(done) {
 
     // 시군구 geojson 생성
     splitGeojson('sig');
@@ -178,56 +197,83 @@ function split() {
     // 동 geojson 생성
     splitGeojson('emd');
 
+
+    done();
+    console.log('[task] split done')
 }
 
 
 
 function mapshaper(key) {
-    var command = 'mapshaper -i '
-        + shpPath[key].source
-        + ' encoding=utf8 -simplify weighted 0.5% -o format=shapefile '
-        + shpPath[key].convert;
 
-    console.log(command);
 
-    exec(command, function (error, stdout, stderr) {
-        if (error) {
-            console.error(`exec error: ${error}`);
-            return;
-        }
+    return new Promise((resolve,reject)=>{
 
-        console.log(stdout);
-        console.log(stderr);
-        console.log('=> convert size')
-        console.log('%s : %d bytes', shpPath[key].source, fs.statSync(shpPath[key].source).size);
-        console.log('%s : %d bytes', shpPath[key].convert, fs.statSync(shpPath[key].convert).size);
-        console.log('=>')
+        console.log(`mapshaper key == ${key}`)
 
-        ogr2ogr(key);
-    });
+        let {source,convert} = shpPath[key]; 
+
+        var command = `mapshaper -i ${source}  encoding=euc-kr -simplify weighted 0.5% -o format=shapefile ${convert}`;
+            // + shpPath[key].source
+            // + ''
+            // + shpPath[key].convert;
+    
+        console.log(command);
+    
+        exec(command,  (error, stdout, stderr) => {
+            if (error) {
+               // console.error(`exec error: ${error}`);
+                reject(error);
+                return;
+            }
+    
+            console.log(stdout);
+            console.log(stderr);
+            console.log('=> convert size')
+            console.log('%s : %d bytes', shpPath[key].source, fs.statSync(shpPath[key].source).size);
+            console.log('%s : %d bytes', shpPath[key].convert, fs.statSync(shpPath[key].convert).size);
+            
+            resolve(key);
+            // ogr2ogr(key);
+        });
+    }).catch(e=>{
+        console.error(e);
+    })
+
 }
 
 // ogr2ogr -f GeoJSON -t_srs epsg:4326 dist/sig.json src/CONVERT/TL_SCCO_SIG_CONVERT.shp
 function ogr2ogr(key) {
-    var command = 'ogr2ogr -f GeoJSON -t_srs epsg:4326 '  //-lco COORDINATE_PRECISION=3
-        + shpPath[key].json
-        + ' ' + shpPath[key].convert;
+
+    let {json, convert} = shpPath[key];
+
+    var command = `ogr2ogr -f GeoJSON -t_srs epsg:4326 ${json} ${convert}`  //-lco COORDINATE_PRECISION=3
+       // + shpPath[key].json
+        //+ ' ' + shpPath[key].convert;
 
     console.log("ogr2ogr :", command);
 
-    exec(command, function (error, stdout, stderr) {
-        if (error) {
-            console.error(error.message);
-            //console.error(`exec error: ${error}`);
-            return;
-        }
+    return new Promise((resolve,reject)=>{
+        
+        exec(command,  (error, stdout, stderr) => {
+            if (error) {
+                console.error(error.message);
+                reject(error);
+                //console.error(`exec error: ${error}`);
+                return;
+            }
 
-        console.log(stdout);
-        console.log(stderr);
-        console.log('=> convert json size')
-        console.log('%s : %d bytes', shpPath[key].json, fs.statSync(shpPath[key].json).size);
-        console.log('=>')
-    });
+            console.log(stdout);
+            console.log(stderr);
+            console.log('=> convert json size')
+            console.log('%s : %d bytes', shpPath[key].json, fs.statSync(shpPath[key].json).size);
+            resolve("ogr2ogr done");
+        });
+
+    }).catch(e=>{
+        console.error(e);
+    })
+
 }
 
 function splitGeojson(type) {
@@ -240,7 +286,7 @@ function splitGeojson(type) {
     // 시군구 데이터 sido 별로 자르기
     var contents = fs.readFileSync(fileName);
     var features = {};
-    contents = iconv.decode(contents, 'utf-8');
+    contents = iconv.decode(contents, 'euc-kr');
 
     var jsonContent = JSON.parse(contents);
 
@@ -275,31 +321,31 @@ function splitGeojson(type) {
 
     for (var key in features) {
 
-        let iterator = features[key];
-        let jsonStr = iterator.reduce((prev, cur, index, list) => {
+        // let iterator = features[key];
+        // let jsonStr = iterator.reduce((prev, cur, index, list) => {
 
-            prev += JSON.stringify(cur);
+        //     prev += JSON.stringify(cur);
 
-            if (index < list.length - 1)
-                prev += ", ";
+        //     if (index < list.length - 1)
+        //         prev += ", ";
 
-            return prev;
+        //     return prev;
 
-        }, "");
+        // }, "");
 
 
-        // var featuresCollection = _.template('{"type": "FeatureCollection", "features": [ \
-        //         <% _.forEach(iterator, function(val, index, list) { %> \
-        //         \n  <%= JSON.stringify(val) %><% \
-        //         if (index < list.length - 1) { \
-        //         %>, <% \
-        //         } \
-        //         }); %> \
-        //     \n]}');
+        var featuresCollection = _.template('{"type": "FeatureCollection", "features": [ \
+                <% _.forEach(iterator, function(val, index, list) { %> \
+                \n  <%= JSON.stringify(val) %><% \
+                if (index < list.length - 1) { \
+                %>, <% \
+                } \
+                }); %> \
+            \n]}');
 
-        // var jsonStr = featuresCollection({
-        //     'iterator': features[key]
-        // });
+        var jsonStr = featuresCollection({
+            'iterator': features[key]
+        });
 
         // split json파일 생성
         fs.writeFileSync("dist/" + type + "/" + key + ".json", jsonStr);
@@ -310,6 +356,8 @@ function splitGeojson(type) {
 
 
 
+exports.default = gulp.series(downloadMapData,decompressAll,cleanShp,convert,cleanSplit, split)
+//exports.default = gulp.series(downloadMapData,decompressAll,cleanShp,convert)
 exports.download = gulp.series(downloadMapData);
 exports.decompress = gulp.series(decompressAll);
 exports.convert = gulp.series(cleanShp, convert)

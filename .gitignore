@@ -11,7 +11,7 @@
 /src/CONVERT/*
 
 # testing
-/coverage
+/coveragehjlkkk
 
 # production
 /build
