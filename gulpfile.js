@@ -139,23 +139,6 @@ const convert =  function (done) {
     let keys = Object.keys(shpPath);
 
     console.log(keys);
-/* 
-    keys.forEach(async function(key){
-
-        try{
-            let path = shpPath[key].source
-            let result = await mapshaper(key, path);
-
-            await ogr2ogr(result);
-
-        }catch(e){
-            console.error(e);
-        }
-
-    })
-
-    console.log('[task] convert is done')
-    done(); */
 
     return Promise.all(keys.map( key => 
         mapshaper(key, shpPath[key].source)
@@ -277,83 +260,72 @@ function ogr2ogr(key) {
 }
 
 function splitGeojson(type) {
-    console.log("\n *Split geoJSON START* \n");
-    console.log(type);
+  console.log("\n *Split geoJSON START* \n")
+  console.log(type)
 
-    var fileName = shpPath[type].json;
-    var exception = [];
+  var fileName = shpPath[type].json
+  //var exception = [ "47940" ]
+  var exception = []
 
-    // 시군구 데이터 sido 별로 자르기
-    var contents = fs.readFileSync(fileName);
-    var features = {};
-    contents = iconv.decode(contents, 'euc-kr');
+  // 시군구 데이터 sido 별로 자르기
+  var contents = fs.readFileSync(fileName)
+  var features = {}
+  contents = iconv.decode(contents, 'euc-kr')
 
-    var jsonContent = JSON.parse(contents);
+  var jsonContent = JSON.parse(contents)
+  
 
-    for (var key in jsonContent.features) {
-        var feature = jsonContent.features[key];
-        var subKey, cd, name;
+  for (var key in jsonContent.features) {
+    var feature = jsonContent.features[key]
+    var subKey, cd, name
 
-        if (type == 'sig') {
-            cd = feature.properties.SIG_CD;
-            name = feature.properties.SIG_KOR_NM;
-            subKey = feature.properties.SIG_CD.substr(0, 2);
-        } else if (type == 'emd') {
-            cd = feature.properties.EMD_CD;
-            name = feature.properties.EMD_KOR_NM;
-            subKey = feature.properties.EMD_CD.substr(0, 5);
-        }
+    console.log('TEST!!!!', feature.properties)
 
-        console.log(`feature.properties.cd: ${cd}, feature.properties.name: ${name}`);
-
-        if (features.hasOwnProperty(subKey)) {
-            if (exception.includes(cd)) {
-                features[subKey].push(feature);
-            }
-        } else {
-            features[subKey] = [];
-
-            if (exception.includes(cd)) {
-                features[subKey].push(feature);
-            }
-        }
+    if (type == 'sig') {
+      cd = feature.properties.SIG_CD
+      name = feature.properties.SIG_KOR_NM
+      subKey = feature.properties.SIG_CD.substr(0, 2)
+    } else if (type == 'emd') {
+      cd = feature.properties.EMD_CD
+      name = feature.properties.EMD_KOR_NM
+      subKey = feature.properties.EMD_CD.substr(0, 5)
     }
 
-    for (var key in features) {
+    console.log(`feature.properties.cd: ${cd}, feature.properties.name: ${name}`)
 
-        // let iterator = features[key];
-        // let jsonStr = iterator.reduce((prev, cur, index, list) => {
+    if (features.hasOwnProperty(subKey)) {
+      if (!_.has(exception, cd)) {
+        features[subKey].push(feature)
+      }
+    } else {
+      features[subKey] = []
 
-        //     prev += JSON.stringify(cur);
+      if (!_.has(exception, cd)) {
+        features[subKey].push(feature)
+      }
+    }
+  }
 
-        //     if (index < list.length - 1)
-        //         prev += ", ";
-
-        //     return prev;
-
-        // }, "");
-
-
-        var featuresCollection = _.template('{"type": "FeatureCollection", "features": [ \
+  for (var key in features) {
+    var featuresCollection = _.template('{"type": "FeatureCollection", "features": [ \
                 <% _.forEach(iterator, function(val, index, list) { %> \
                 \n  <%= JSON.stringify(val) %><% \
                 if (index < list.length - 1) { \
                 %>, <% \
                 } \
-                }); %> \
-            \n]}');
+                }) %> \
+            \n]}')
 
-        var jsonStr = featuresCollection({
-            'iterator': features[key]
-        });
+    var jsonStr = featuresCollection({
+      'iterator': features[key]
+    })
 
-        // split json파일 생성
-        fs.writeFileSync("dist/" + type + "/" + key + ".json", jsonStr);
-    }
+    // split json파일 생성
+    fs.writeFileSync("dist/" + type + "/" + key + ".json", jsonStr)
+  }
 
-    console.log("\n *EXIT* \n");
+  console.log("\n *EXIT* \n")
 }
-
 
 
 exports.default = gulp.series(downloadMapData,decompressAll,cleanShp,convert,cleanSplit, split)
